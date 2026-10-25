@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Internal Identity & Auth Portal</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <nav class="topbar">
+        <div class="brand">
+            <span class="brand-icon">IA</span>
+            <span>Internal Systems</span>
+        </div>
+        <span class="status"><span class="dot"></span> Auth service operational</span>
+    </nav>
+
+    <main class="container">
+        <section class="hero">
+            <p class="eyebrow">IDENTITY SERVICES</p>
+            <h1>Single Sign-On Token Portal</h1>
+            <p>
+                Generate standard employee JSON Web Tokens (JWT) and verify
+                session claims across internal services.
+            </p>
+        </section>
+
+        <section class="section">
+            <div class="section-heading">
+                <h2>Your Active Employee Token</h2>
+                <p>Use this standard HS256 token to authenticate with internal endpoints</p>
+            </div>
+            <div class="flag-box">
+                <code>{{ sample_token }}</code>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-heading">
+                <h2>Service endpoints</h2>
+                <p>Token utilities and administrative access</p>
+            </div>
+
+            <div class="grid">
+                <a class="card" href="/api/token">
+                    <span class="card-icon">01</span>
+                    <h3>Issue Employee Token</h3>
+                    <p>Request a freshly signed JWT for standard employee access.</p>
+                    <span class="link-text">Get token →</span>
+                </a>
+
+                <a class="card" href="/api/verify?token={{ sample_token }}">
+                    <span class="card-icon">02</span>
+                    <h3>Inspect & Verify Token</h3>
+                    <p>Verify the cryptographic signature and view decoded JWT claims.</p>
+                    <span class="link-text">Verify token →</span>
+                </a>
+
+                <a class="card" href="/api/admin/">
+                    <span class="card-icon">03</span>
+                    <h3>Administrator Portal</h3>
+                    <p>Submit an admin-level JWT to unlock restricted resources.</p>
+                    <span class="link-text">Open Admin Portal →</span>
+                </a>
+
+                <a class="card" href="/api/help">
+                    <span class="card-icon">04</span>
+                    <h3>API Reference</h3>
+                    <p>Review all available authentication service endpoints.</p>
+                    <span class="link-text">View reference →</span>
+                </a>
+            </div>
+        </section>
+
+        <footer>
+            <span>Internal Systems</span>
+            <span>Internal Auth API · v1.4.0</span>
+        </footer>
+    </main>
+</body>
+</html>

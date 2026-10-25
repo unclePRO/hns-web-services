@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Administrator Portal</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <nav class="topbar">
+        <div class="brand">
+            <span class="brand-icon">IA</span>
+            <span>Internal Systems</span>
+        </div>
+        <span class="status">Restricted access</span>
+    </nav>
+
+    <main class="container">
+        <section class="hero">
+            <p class="eyebrow">RESTRICTED AREA</p>
+            <h1>Administrator Portal</h1>
+            <p>Submit a valid JWT with the <strong>admin</strong> role claim to access protected resources.</p>
+        </section>
+
+        <section class="section">
+            <div class="admin-panel">
+                <form id="tokenForm" method="POST" action="/api/admin/">
+                    <label for="token">Session JWT</label>
+                    <input
+                        type="text"
+                        id="token"
+                        name="token"
+                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        required
+                    >
+                    <button type="submit">Verify JWT & Authenticate</button>
+                </form>
+
+                {% if message %}
+                    <p id="tokenMessage" role="status">{{ message }}</p>
+                {% endif %}
+
+                {% if flag %}
+                    <div class="flag-box">
+                        <h2>Access Granted</h2>
+                        <p>Your challenge flag:</p>
+                        <code>{{ flag }}</code>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
+
+        <footer>
+            <span>Internal Systems</span>
+            <a href="/">Return to main portal</a>
+        </footer>
+    </main>
+</body>
+</html>
