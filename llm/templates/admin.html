@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Support Desk - AI Assistant</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; }
+        #ai-response { white-space: pre-wrap; background: #eef; padding: 15px; border-left: 4px solid #33c; }
+    </style>
+</head>
+<body>
+    <h2>Admin Panel: Customer Support Inbox</h2>
+    
+    <div class="box">
+        <h3>Raw Inbox Data</h3>
+        <ul>
+            {% for email in emails %}
+                <li><strong>{{ email.sender }}:</strong> {{ email.body }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="box">
+        <h3>AI Email Summarizer</h3>
+        <p>Use the AI to read and summarize all customer requests.</p>
+        <button onclick="runAI()">Summarize Inbox</button>
+        <br><br>
+        <div id="ai-response">AI output will appear here...</div>
+    </div>
+
+    <hr>
+    
+    <!-- Simulation tool to inject data from the outside -->
+    <h3>Attacker Tools (Simulate External Email)</h3>
+    <form action="/api/receive_email" method="POST" target="_blank">
+        <label>Sender:</label><br>
+        <input type="text" name="sender" value="attacker@evil.com"><br><br>
+        <label>Email Body:</label><br>
+        <textarea name="body" rows="4" cols="60" placeholder="Write something malicious..."></textarea><br><br>
+        <input type="submit" value="Send External Email">
+    </form>
+
+    <script>
+        function runAI() {
+            document.getElementById('ai-response').innerText = "AI is thinking...";
+            fetch('/api/ai_summarize', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('ai-response').innerText = data.ai_output;
+                });
+        }
+    </script>
+</body>
+</html>
