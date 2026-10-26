@@ -1,4 +1,4 @@
-# Hack & Shield 2026: Internal Systems A&D Services
+# Internal Systems A&D Services
 
 ## Overview
 This repository contains a suite of three intentionally vulnerable web services designed for the **Hack & Shield 2026 Attack & Defense (A&D) CTF**. The services are themed around a corporate "Internal Systems" network, featuring shared Apple/macOS-inspired styling for a cohesive competition environment.
