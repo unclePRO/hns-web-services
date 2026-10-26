@@ -57,18 +57,13 @@ def decode_token_strict(token):
 
 
 def decode_admin_token(token):
-    """
-    Intentionally vulnerable decoder for the CTF.
-    Signature verification is disabled, allowing attackers to modify
-    the 'role' claim to 'admin' without knowing JWT_SECRET.
-    """
+    # Decode token for admin portal access
     return jwt.decode(
         token,
         JWT_SECRET,
         algorithms=["HS256"],
         options={"verify_signature": False}
     )
-
 
 # --------------------------------------------------
 # Main portal
