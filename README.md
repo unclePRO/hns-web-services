@@ -1,7 +1,7 @@
 # Internal Systems A&D Services
 
 ## Overview
-This repository contains a suite of three intentionally vulnerable web services designed for the **Hack & Shield 2026 Attack & Defense (A&D) CTF**. The services are themed around a corporate "Internal Systems" network, featuring shared Apple/macOS-inspired styling for a cohesive competition environment.
+This repository contains a suite of three intentionally vulnerable web services. The services are themed around a corporate "Internal Systems" network.
 
 As an Attack & Defense CTF, each service is designed to be fully exploitable by the Red Team and cleanly patchable by the Blue Team without breaking standard Service Level Agreement (SLA) functionality.
 
@@ -16,8 +16,8 @@ This repository contains three independent modules, each running on its own desi
 * **Description:** A corporate Single Sign-On (SSO) dashboard that issues employee session tokens. The critical administrator endpoint disables cryptographic signature verification during the decoding process, allowing attackers to forge tokens with elevated claims without knowing the server's secret key.
 
 ### 2. Internal Access Portal (CSRF)
-* **Directory:** `/csrf_auth/`
-* **Port:** `5000` (or `5002` depending on configuration)
+* **Directory:** `/csrf/`
+* **Port:** `5000`
 * **Vulnerability:** Cross-Site Request Forgery (Account Takeover)
 * **Description:** An account management portal where employees update their contact addresses. The state-changing endpoint properly checks for active session cookies but fails to validate the HTTP `Referer` or implement CSRF tokens. Attackers can hijack an admin's browser session to silently overwrite the admin's recovery email.
 
