@@ -1,52 +1,82 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Support Desk - AI Assistant</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; }
-        #ai-response { white-space: pre-wrap; background: #eef; padding: 15px; border-left: 4px solid #33c; }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Support Desk — Intelligence Assistant</title>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <h2>Admin Panel: Customer Support Inbox</h2>
-    
-    <div class="box">
-        <h3>Raw Inbox Data</h3>
-        <ul>
-            {% for email in emails %}
-                <li><strong>{{ email.sender }}:</strong> {{ email.body }}</li>
-            {% endfor %}
-        </ul>
-    </div>
+    <nav class="apple-nav">
+        <div class="nav-brand">Support Desk</div>
+        <span class="nav-badge">Intelligence Summarizer</span>
+    </nav>
 
-    <div class="box">
-        <h3>AI Email Summarizer</h3>
-        <p>Use the AI to read and summarize all customer requests.</p>
-        <button onclick="runAI()">Summarize Inbox</button>
-        <br><br>
-        <div id="ai-response">AI output will appear here...</div>
-    </div>
+    <main class="container">
+        <div class="hero">
+            <p class="eyebrow">Internal Care Console</p>
+            <h1>Customer Support Inbox</h1>
+            <p class="subtitle">Review incoming customer tickets and run automated AI triage.</p>
+        </div>
 
-    <hr>
-    
-    <!-- Simulation tool to inject data from the outside -->
-    <h3>Attacker Tools (Simulate External Email)</h3>
-    <form action="/api/receive_email" method="POST" target="_blank">
-        <label>Sender:</label><br>
-        <input type="text" name="sender" value="attacker@evil.com"><br><br>
-        <label>Email Body:</label><br>
-        <textarea name="body" rows="4" cols="60" placeholder="Write something malicious..."></textarea><br><br>
-        <input type="submit" value="Send External Email">
-    </form>
+        <div class="grid-2">
+            <!-- Left Card: Raw Inbox -->
+            <div class="card">
+                <h3>Raw Inbox Queue ({{ emails|length }})</h3>
+                <p class="card-subtitle">Untrusted external emails awaiting triage.</p>
+                <ul class="email-list">
+                    {% for email in emails %}
+                        <li class="email-item">
+                            <div class="email-sender">{{ email.sender }}</div>
+                            <div class="email-body">{{ email.body }}</div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Right Card: AI Summarizer -->
+            <div class="card">
+                <h3>AI Email Summarizer</h3>
+                <p class="card-subtitle">Summarize all customer requests and run automated workflows.</p>
+                <button class="btn" onclick="runAI()">Summarize Inbox</button>
+
+                <div id="ai-response" class="ai-console">Ready. Click "Summarize Inbox" to generate an AI briefing...</div>
+            </div>
+        </div>
+
+        <!-- Bottom Card: External Email Simulator -->
+        <div class="card">
+            <h3>Simulate External Customer Email</h3>
+            <p class="card-subtitle">Send a new support ticket into the inbox queue above.</p>
+            <form action="/api/receive_email" method="POST" target="_blank">
+                <div class="form-group">
+                    <label for="sender">Sender Address</label>
+                    <input type="text" id="sender" name="sender" value="attacker@evil.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="body">Email Body</label>
+                    <textarea id="body" name="body" rows="3" placeholder="Write a customer message or test prompt injection..." required></textarea>
+                </div>
+                <button type="submit" class="btn btn-secondary">Send External Email</button>
+            </form>
+        </div>
+
+        <footer class="footer">
+            Support Desk AI Triage · Port 5003
+        </footer>
+    </main>
 
     <script>
         function runAI() {
-            document.getElementById('ai-response').innerText = "AI is thinking...";
+            const outputBox = document.getElementById('ai-response');
+            outputBox.innerText = "Generating intelligence summary...";
             fetch('/api/ai_summarize', { method: 'POST' })
                 .then(res => res.json())
                 .then(data => {
-                    document.getElementById('ai-response').innerText = data.ai_output;
+                    outputBox.innerText = data.ai_output;
+                })
+                .catch(() => {
+                    outputBox.innerText = "Error communicating with AI service.";
                 });
         }
     </script>
