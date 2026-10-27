@@ -138,7 +138,8 @@ python -m pytest -v
 
 You can also verify manually that normal employee tokens still validate properly:
 ```bash
-NORMAL_TOKEN=$(curl -s [http://127.0.0.1:5001/api/token](http://127.0.0.1:5001/api/token) | jq -r .token)
-curl -s "[http://127.0.0.1:5001/api/verify?token=$NORMAL_TOKEN](http://127.0.0.1:5001/api/verify?token=$NORMAL_TOKEN)"
+NORMAL_TOKEN=$(curl -s http://127.0.0.1:5001/api/token | jq -r .token)
+
+curl -s http://127.0.0.1:5001/api/verify?token=$NORMAL_TOKEN
 ```
 **Expected Output:** `{"claims":{...},"valid":true}`
