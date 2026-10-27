@@ -25,25 +25,76 @@ python app.py
 
 ---
 
-## Vulnerability Analysis & Flag Conditions
+## Attack Phase (Red Team) — Conceptual Walkthrough
+The goal of the Red Team is to analyze the authentication logic, identify how legacy tokens are processed, and satisfy the administrative claim checks to retrieve the flag.
 
-### Why Simple Token Tampering Fails
-Unlike basic JWT challenges where signature verification is globally disabled, modifying the payload of a standard employee token directly will fail with `401 Invalid token`. Both `/api/verify` and `/api/admin/flag` enforce `verify_signature: True` whenever the JWT header has `"typ": "JWT"`.
+### Step 1: Endpoint & Token Reconnaissance
+Inspect the service endpoints via `/api/help` and request a baseline token from `/api/token`. Decoding a standard employee token reveals the baseline structure:
 
-### Conditions Required to Retrieve the Flag
-Through source code review of `app.py`, two components govern administrative access:
+**Standard Header:**
+```json
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
+```
 
-1. **Header Compatibility Bypass (`build_decode_options`):**
-   When `decode_portal_token()` inspects the unverified JWT header via `jwt.get_unverified_header(token)`, it passes `mode="portal"` to `build_decode_options()`. If the header's `typ` field is set to `"JWT-LEGACY"`, the function overrides `options["verify_signature"] = False`.
-2. **Multi-Claim Validation (`validate_admin_claims`):**
-   Even when a token is decoded, the server enforces strict claim requirements before returning `FLAG`:
-   * `iss` must equal `"Internal Auth API"`.
-   * `exp` must be a valid future Unix timestamp.
-   * `role` must be set to `"admin"`.
-   * `aud` must be scoped to `"internal-admin"` (instead of `"employee-portal"`).
-   * `clearance` must be an integer `>= 5` (instead of `1`).
+**Standard Payload:**
+```json
+{
+  "sub": "employee_01",
+  "role": "employee",
+  "clearance": 1,
+  "iss": "Internal Auth API",
+  "aud": "employee-portal",
+  "iat": 1730000000,
+  "exp": 1730007200
+}
+```
 
-When a token satisfying both the header condition and all required claims is submitted to `/api/admin/` or `/api/admin/flag`, the application returns the flag: `HNS{jwt_legacy_header_claim_escalation}`.
+Attempting to modify `"role": "admin"` on a standard token and submitting it to `/api/admin/` or `/api/admin/flag` fails with a `401` error because `DEFAULT_DECODE_OPTIONS` enforces `"verify_signature": True`.
+
+### Step 2: Source Code Audit (Identifying the Header Bypass)
+Reviewing `app.py` reveals a difference between how `/api/verify` and the admin endpoints decode tokens:
+* `/api/verify` calls `decode_token_strict()`, which passes `mode="strict"` to `build_decode_options()`.
+* `/api/admin/` and `/api/admin/flag` call `decode_portal_token()`, which inspects the unverified JWT header (`jwt.get_unverified_header(token)`) and passes `mode="portal"` to `build_decode_options()`.
+
+Inside `build_decode_options()`, if `mode == "portal"` and the header's `typ` field is set to `"JWT-LEGACY"`, the decoder overrides `options["verify_signature"] = False`.
+
+### Step 3: Satisfying Multi-Claim Validation
+Bypassing signature verification via the header alone is not sufficient. Both admin endpoints pass the decoded claims into `validate_admin_claims(claims)` and verify required fields defined in `DEFAULT_DECODE_OPTIONS`. To pass all checks, a token must contain:
+
+**Required Header Structure:**
+```json
+{
+  "alg": "HS256",
+  "typ": "JWT-LEGACY"
+}
+```
+
+**Required Payload Claims:**
+```json
+{
+  "sub": "admin_user",
+  "role": "admin",
+  "clearance": 5,
+  "iss": "Internal Auth API",
+  "aud": "internal-admin",
+  "exp": 1999999999
+}
+```
+* `role` must equal `"admin"`.
+* `aud` must be changed from `"employee-portal"` to `"internal-admin"`.
+* `clearance` must be an integer greater than or equal to `5`.
+* `iss` must remain `"Internal Auth API"`, and `exp` must be a valid future Unix timestamp.
+
+### Step 4: Retrieving the Flag
+When a JWT encoded with the `"typ": "JWT-LEGACY"` header and the escalated administrative claims is submitted to the service:
+1. **Via the Web Portal:** Paste the token into the form at `http://127.0.0.1:5001/api/admin/` and click **Verify JWT & Authenticate**.
+2. **Via the API:** Send the token in the `Authorization: Bearer <token>` HTTP header to `GET /api/admin/flag`.
+
+Once both `decode_portal_token()` and `validate_admin_claims()` succeed, the service responds with:
+`{"flag": "HNS{jwt_legacy_header_claim_escalation}", "message": "Administrator authenticated"}`
 
 ---
 
@@ -78,7 +129,7 @@ def build_decode_options(token_header, mode="strict"):
 *(Alternatively, update `decode_portal_token()` to call `decode_token_strict(token)` directly).*
 
 ### Step 3: Verify the Fix (SLA Check)
-Restart the Flask server and run the test suite from the project root to confirm all service checks pass:
+Restart the Flask server and run the automated test suite from the project root to confirm all service checks pass:
 
 ```bash
 source .venv/bin/activate
