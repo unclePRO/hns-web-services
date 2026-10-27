@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Blockstar Games — Internal Build &amp; Asset Vault</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -11,33 +14,34 @@
 <nav class="navbar">
     <div class="nav-left">
         <div class="logo-mark">B★</div>
-        <div class="brand-stack">
-            <span class="brand-name">BLOCKSTAR GAMES</span>
-            <span class="brand-sub">RAGE Engine Build Distribution</span>
-        </div>
+        <span class="nav-brand">BLOCKSTAR GAMES</span>
     </div>
     <div class="nav-right">
-        <span class="status-pill"><span class="pulse-dot"></span> Internal Dev Network Active</span>
-        <a href="/api/builds" class="nav-link">API Catalog</a>
+        <a href="/api/builds" class="nav-link">API CATALOG</a>
     </div>
 </nav>
 
 <main class="container">
 
     <header class="hero">
-        <div class="eyebrow">CONFIDENTIAL DEVELOPER NETWORK</div>
-        <h1>Pre-Release Asset &amp; Build Vault</h1>
-        <p class="hero-sub">
-            Download compiled nightly packages and staging builds. Restricted
-            titles require a valid 64-character developer token tied to that
-            specific project.
-        </p>
+        <div class="hero-row">
+            <div class="logo-mark hero-mark">B★</div>
+            <div class="hero-text">
+                <div class="eyebrow">CONFIDENTIAL DEVELOPER NETWORK</div>
+                <h1>Build Vault</h1>
+                <p class="hero-sub">
+                    Download compiled nightly packages and staging builds.
+                    Restricted titles require a valid 64-character developer
+                    token tied to that specific project.
+                </p>
+            </div>
+        </div>
     </header>
 
     <section class="grid-section">
         <div class="section-header">
-            <h2>Available Repository Builds</h2>
-            <span class="meta-count" id="buildCount">— Packages Indexed</span>
+            <h2>AVAILABLE REPOSITORY BUILDS</h2>
+            <span class="meta-count" id="buildCount">— PACKAGES INDEXED</span>
         </div>
 
         <div id="catalog" class="build-grid">
@@ -46,11 +50,14 @@
     </section>
 
     <section class="auth-section" id="auth-console">
+        <div class="section-header">
+            <h2>BUILD DISPATCH AUTHENTICATION</h2>
+        </div>
+
         <div class="console-card">
 
             <div class="console-form-pane">
-                <div class="eyebrow">BUILD DISPATCH AUTHENTICATION</div>
-                <h2 id="selected-title">Request Build Manifest</h2>
+                <h3 id="selected-title">Request Build Manifest</h3>
                 <p class="console-desc">
                     Submit your target <code>game_id</code> and developer
                     token to request the internal CDN download link.
@@ -58,7 +65,7 @@
 
                 <form id="downloadForm">
                     <div class="form-group">
-                        <label for="game_id">Target Game ID</label>
+                        <label for="game_id">TARGET GAME ID</label>
                         <input
                             type="text"
                             id="game_id"
@@ -69,7 +76,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="dev_token">Developer Token</label>
+                        <label for="dev_token">DEVELOPER TOKEN</label>
                         <input
                             type="text"
                             id="dev_token"
@@ -80,17 +87,17 @@
                         >
                     </div>
 
-                    <button type="submit" class="btn btn-gold btn-full" id="submitBtn">
-                        Verify Token &amp; Request Build
+                    <button type="submit" class="btn btn-primary btn-full" id="submitBtn">
+                        VERIFY TOKEN &amp; REQUEST BUILD
                     </button>
                 </form>
             </div>
 
             <div class="console-output-pane">
                 <div class="terminal-header">
-                    <span class="term-dot red"></span>
-                    <span class="term-dot yellow"></span>
-                    <span class="term-dot green"></span>
+                    <span class="term-dot"></span>
+                    <span class="term-dot"></span>
+                    <span class="term-dot"></span>
                     <span class="term-title">manifest-dispatch-tty</span>
                 </div>
                 <pre id="terminalOutput" class="terminal-body">// Ready.
@@ -101,8 +108,8 @@
     </section>
 
     <footer class="footer">
-        <span>Blockstar Games Internal Engineering</span>
-        <span>MongoDB Asset Node · Port 5002</span>
+        <span>BLOCKSTAR GAMES — INTERNAL ENGINEERING</span>
+        <span>MONGODB ASSET NODE · PORT 5002</span>
     </footer>
 
 </main>
@@ -116,11 +123,11 @@ async function loadCatalog() {
         const res = await fetch('/api/builds');
         const data = await res.json();
         grid.innerHTML = '';
-        countEl.textContent = `${data.builds.length} Packages Indexed`;
+        countEl.textContent = `${data.builds.length} PACKAGES INDEXED`;
 
         data.builds.forEach(build => {
             const card = document.createElement('div');
-            card.className = 'build-card' + (build.classified ? ' card-classified' : '');
+            card.className = 'build-card' + (build.classified ? ' card-restricted' : '');
 
             const sizeLine = build.size_mb
                 ? `${(build.size_mb / 1024).toFixed(1)} GB`
@@ -128,7 +135,7 @@ async function loadCatalog() {
 
             card.innerHTML = `
                 <div class="card-top">
-                    <span class="badge ${build.classified ? 'badge-nda' : 'badge-public'}">
+                    <span class="tag ${build.classified ? 'tag-restricted' : 'tag-public'}">
                         ${build.classified ? 'RESTRICTED' : 'DEV BUILD'}
                     </span>
                     <span class="build-size">${sizeLine}</span>
@@ -136,18 +143,17 @@ async function loadCatalog() {
 
                 <h3>${build.name}</h3>
                 <p class="build-meta">
-                    <strong>ID:</strong> <code>${build.game_id}</code> &bull;
-                    <strong>Build:</strong> ${build.build}
+                    ID <code>${build.game_id}</code> &nbsp;·&nbsp; BUILD ${build.build}
                 </p>
-                <p class="build-studio">${build.platform}</p>
+                <p class="build-platform">${build.platform}</p>
 
                 <div class="card-actions">
                     <button
-                        class="btn ${build.classified ? 'btn-gold' : 'btn-secondary'}"
+                        class="btn ${build.classified ? 'btn-primary' : 'btn-outline'} btn-full"
                         data-id="${build.game_id}"
                         data-name="${build.name}"
                     >
-                        ${build.classified ? '🔒 Unlock Restricted Build' : '⬇ Request Build'}
+                        ${build.classified ? 'REQUEST — TOKEN REQUIRED' : 'REQUEST BUILD'}
                     </button>
                 </div>
             `;
@@ -184,7 +190,7 @@ document.getElementById('downloadForm').addEventListener('submit', async (e) => 
         '[*] Payload: ' + JSON.stringify(requestBody) + '\n\n';
 
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Dispatching…';
+    submitBtn.textContent = 'DISPATCHING…';
 
     try {
         const res = await fetch('/api/download_build', {
@@ -198,7 +204,7 @@ document.getElementById('downloadForm').addEventListener('submit', async (e) => 
         term.innerText += '[!] Network error communicating with build server.';
     } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Verify Token & Request Build';
+        submitBtn.textContent = 'VERIFY TOKEN & REQUEST BUILD';
     }
 });
 
