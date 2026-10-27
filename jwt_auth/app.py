@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import jwt
 from flask import Flask, jsonify, request, render_template
@@ -14,7 +15,7 @@ app = Flask(__name__)
 
 
 # --------------------------------------------------
-# Load simulated challenge configuration
+# Configuration loader
 # --------------------------------------------------
 
 def load_config():
@@ -35,35 +36,87 @@ def load_config():
 
 CONFIG = load_config()
 JWT_SECRET = CONFIG.get("JWT_SECRET", "default-fallback-secret")
-FLAG = "HNS{jwt_unverified_signature_demo}"
+ISSUER = "Internal Auth API"
+FLAG = "HNS{jwt_legacy_header_claim_escalation}"
+
+DEFAULT_DECODE_OPTIONS = {
+    "verify_signature": True,
+    "verify_exp": True,
+    "require": ["sub", "role", "iss", "aud", "clearance", "exp"]
+}
 
 
 # --------------------------------------------------
-# JWT Helper Functions
+# Token lifecycle and validation helpers
 # --------------------------------------------------
 
 def issue_employee_token(username="employee_01"):
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": username,
         "role": "employee",
-        "iss": "Internal Auth API"
+        "clearance": 1,
+        "iss": ISSUER,
+        "aud": "employee-portal",
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(hours=2)).timestamp())
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+    headers = {
+        "typ": "JWT",
+        "alg": "HS256"
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256", headers=headers)
+
+
+def build_decode_options(token_header, mode="strict"):
+    options = dict(DEFAULT_DECODE_OPTIONS)
+
+    # Legacy SSO migration compatibility support for v1 internal tokens
+    if mode == "portal" and token_header.get("typ") == "JWT-LEGACY":
+        options["verify_signature"] = False
+
+    return options
 
 
 def decode_token_strict(token):
-    """Secure decoder used by the public token inspector."""
-    return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-
-
-def decode_admin_token(token):
-    # Decode token for admin portal access
+    header = jwt.get_unverified_header(token)
+    options = build_decode_options(header, mode="strict")
     return jwt.decode(
         token,
         JWT_SECRET,
         algorithms=["HS256"],
-        options={"verify_signature": False}
+        issuer=ISSUER,
+        audience=["employee-portal", "internal-admin"],
+        options=options
     )
+
+
+def decode_portal_token(token):
+    header = jwt.get_unverified_header(token)
+    options = build_decode_options(header, mode="portal")
+    return jwt.decode(
+        token,
+        JWT_SECRET,
+        algorithms=["HS256"],
+        issuer=ISSUER,
+        audience=["employee-portal", "internal-admin"],
+        options=options
+    )
+
+
+def validate_admin_claims(claims):
+    if claims.get("role") != "admin":
+        return False, f"Role '{claims.get('role')}' does not have administrative access."
+
+    if claims.get("aud") != "internal-admin":
+        return False, "Token audience must be scoped to 'internal-admin'."
+
+    clearance = claims.get("clearance", 0)
+    if not isinstance(clearance, int) or clearance < 5:
+        return False, "Insufficient security clearance level (Level 5 required)."
+
+    return True, "Authorized"
+
 
 # --------------------------------------------------
 # Main portal
@@ -83,7 +136,7 @@ def home():
 def status():
     return jsonify({
         "service": "Internal Auth API",
-        "version": "1.4.0",
+        "version": "1.5.0",
         "status": "online"
     })
 
@@ -100,7 +153,7 @@ def help_api():
             "admin_flag_api": "/api/admin/flag"
         },
         "auth_description":
-            "Generate an employee JWT via /api/token and use /api/admin/ for elevated access."
+            "Generate an employee JWT via /api/token and authenticate with internal services."
     })
 
 
@@ -111,13 +164,11 @@ def get_token():
     return jsonify({
         "token": token,
         "role": "employee",
+        "clearance": 1,
+        "audience": "employee-portal",
         "message": "Standard employee token issued."
     })
 
-
-# --------------------------------------------------
-# Secure token verification endpoint
-# --------------------------------------------------
 
 @app.get("/api/verify")
 def verify_token():
@@ -135,12 +186,12 @@ def verify_token():
     except jwt.InvalidTokenError as exc:
         return jsonify({
             "valid": False,
-            "error": f"Signature verification failed: {str(exc)}"
+            "error": f"Token validation failed: {str(exc)}"
         }), 401
 
 
 # --------------------------------------------------
-# Vulnerable Admin Portal & API
+# Administration Portal & API
 # --------------------------------------------------
 
 @app.route("/api/admin/", methods=["GET", "POST"])
@@ -156,17 +207,15 @@ def admin_portal():
             message = "Please provide a JWT session token."
         else:
             try:
-                claims = decode_admin_token(token)
-                if claims.get("role") == "admin":
+                claims = decode_portal_token(token)
+                authorized, reason = validate_admin_claims(claims)
+                if authorized:
                     message = f"Welcome, Administrator ({claims.get('sub', 'unknown')})."
                     flag = FLAG
                 else:
-                    message = (
-                        f"Access denied. Token role is '{claims.get('role')}', "
-                        "but 'admin' is required."
-                    )
-            except jwt.InvalidTokenError:
-                message = "Malformed JWT token."
+                    message = f"Access denied: {reason}"
+            except jwt.InvalidTokenError as exc:
+                message = f"Token rejected: {str(exc)}"
 
     return render_template(
         "admin.html",
@@ -185,14 +234,15 @@ def admin_flag_api():
     token = auth_header.split(" ", 1)[1].strip()
 
     try:
-        claims = decode_admin_token(token)
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Invalid token"}), 401
+        claims = decode_portal_token(token)
+    except jwt.InvalidTokenError as exc:
+        return jsonify({"error": f"Invalid token: {str(exc)}"}), 401
 
-    if claims.get("role") != "admin":
+    authorized, reason = validate_admin_claims(claims)
+    if not authorized:
         return jsonify({
             "error": "Insufficient privileges",
-            "current_role": claims.get("role")
+            "detail": reason
         }), 403
 
     return jsonify({
@@ -209,10 +259,6 @@ def admin_flag_api():
 def not_found(_error):
     return jsonify({"error": "Endpoint not found"}), 404
 
-
-# --------------------------------------------------
-# Run locally
-# --------------------------------------------------
 
 if __name__ == "__main__":
     app.run(
