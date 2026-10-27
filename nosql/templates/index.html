@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blockstar Games — Internal Build &amp; Asset Vault</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="nav-left">
+        <div class="logo-mark">B★</div>
+        <div class="brand-stack">
+            <span class="brand-name">BLOCKSTAR GAMES</span>
+            <span class="brand-sub">RAGE Engine Build Distribution</span>
+        </div>
+    </div>
+    <div class="nav-right">
+        <span class="status-pill"><span class="pulse-dot"></span> Internal Dev Network Active</span>
+        <a href="/api/builds" class="nav-link">API Catalog</a>
+    </div>
+</nav>
+
+<main class="container">
+
+    <header class="hero">
+        <div class="eyebrow">CONFIDENTIAL DEVELOPER NETWORK</div>
+        <h1>Pre-Release Asset &amp; Build Vault</h1>
+        <p class="hero-sub">
+            Download compiled nightly packages and staging builds. Restricted
+            titles require a valid 64-character developer token tied to that
+            specific project.
+        </p>
+    </header>
+
+    <section class="grid-section">
+        <div class="section-header">
+            <h2>Available Repository Builds</h2>
+            <span class="meta-count" id="buildCount">— Packages Indexed</span>
+        </div>
+
+        <div id="catalog" class="build-grid">
+            <div class="loading-state">Loading catalog…</div>
+        </div>
+    </section>
+
+    <section class="auth-section" id="auth-console">
+        <div class="console-card">
+
+            <div class="console-form-pane">
+                <div class="eyebrow">BUILD DISPATCH AUTHENTICATION</div>
+                <h2 id="selected-title">Request Build Manifest</h2>
+                <p class="console-desc">
+                    Submit your target <code>game_id</code> and developer
+                    token to request the internal CDN download link.
+                </p>
+
+                <form id="downloadForm">
+                    <div class="form-group">
+                        <label for="game_id">Target Game ID</label>
+                        <input
+                            type="text"
+                            id="game_id"
+                            name="game_id"
+                            placeholder="e.g. bar1, asv1, gta7"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dev_token">Developer Token</label>
+                        <input
+                            type="text"
+                            id="dev_token"
+                            name="dev_token"
+                            placeholder="Paste your dev token"
+                            autocomplete="off"
+                            required
+                        >
+                    </div>
+
+                    <button type="submit" class="btn btn-gold btn-full" id="submitBtn">
+                        Verify Token &amp; Request Build
+                    </button>
+                </form>
+            </div>
+
+            <div class="console-output-pane">
+                <div class="terminal-header">
+                    <span class="term-dot red"></span>
+                    <span class="term-dot yellow"></span>
+                    <span class="term-dot green"></span>
+                    <span class="term-title">manifest-dispatch-tty</span>
+                </div>
+                <pre id="terminalOutput" class="terminal-body">// Ready.
+// Select a build above, or fill in the form, to query POST /api/download_build...</pre>
+            </div>
+
+        </div>
+    </section>
+
+    <footer class="footer">
+        <span>Blockstar Games Internal Engineering</span>
+        <span>MongoDB Asset Node · Port 5002</span>
+    </footer>
+
+</main>
+
+<script>
+async function loadCatalog() {
+    const grid = document.getElementById('catalog');
+    const countEl = document.getElementById('buildCount');
+
+    try {
+        const res = await fetch('/api/builds');
+        const data = await res.json();
+        grid.innerHTML = '';
+        countEl.textContent = `${data.builds.length} Packages Indexed`;
+
+        data.builds.forEach(build => {
+            const card = document.createElement('div');
+            card.className = 'build-card' + (build.classified ? ' card-classified' : '');
+
+            const sizeLine = build.size_mb
+                ? `${(build.size_mb / 1024).toFixed(1)} GB`
+                : '— GB';
+
+            card.innerHTML = `
+                <div class="card-top">
+                    <span class="badge ${build.classified ? 'badge-nda' : 'badge-public'}">
+                        ${build.classified ? 'RESTRICTED' : 'DEV BUILD'}
+                    </span>
+                    <span class="build-size">${sizeLine}</span>
+                </div>
+
+                <h3>${build.name}</h3>
+                <p class="build-meta">
+                    <strong>ID:</strong> <code>${build.game_id}</code> &bull;
+                    <strong>Build:</strong> ${build.build}
+                </p>
+                <p class="build-studio">${build.platform}</p>
+
+                <div class="card-actions">
+                    <button
+                        class="btn ${build.classified ? 'btn-gold' : 'btn-secondary'}"
+                        data-id="${build.game_id}"
+                        data-name="${build.name}"
+                    >
+                        ${build.classified ? '🔒 Unlock Restricted Build' : '⬇ Request Build'}
+                    </button>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+
+        grid.querySelectorAll('.card-actions .btn').forEach(btn => {
+            btn.addEventListener('click', () => selectBuild(btn.dataset.id, btn.dataset.name));
+        });
+    } catch (err) {
+        grid.innerHTML = '<div class="loading-state">Could not load catalog.</div>';
+    }
+}
+
+function selectBuild(gameId, title) {
+    document.getElementById('game_id').value = gameId;
+    document.getElementById('dev_token').value = '';
+    document.getElementById('selected-title').innerText = 'Target: ' + title;
+    document.getElementById('auth-console').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('dev_token').focus();
+}
+
+document.getElementById('downloadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const gameId = document.getElementById('game_id').value.trim();
+    const devToken = document.getElementById('dev_token').value.trim();
+    const term = document.getElementById('terminalOutput');
+    const submitBtn = document.getElementById('submitBtn');
+
+    const requestBody = { game_id: gameId, dev_token: devToken };
+
+    term.innerText = '[*] POST /api/download_build\n' +
+        '[*] Payload: ' + JSON.stringify(requestBody) + '\n\n';
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Dispatching…';
+
+    try {
+        const res = await fetch('/api/download_build', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+        const data = await res.json();
+        term.innerText += `[HTTP ${res.status}]\n` + JSON.stringify(data, null, 2);
+    } catch (err) {
+        term.innerText += '[!] Network error communicating with build server.';
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Verify Token & Request Build';
+    }
+});
+
+loadCatalog();
+</script>
+
+</body>
+</html>
